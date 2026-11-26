@@ -121,6 +121,16 @@ test("вход доступен в узком окне и закрытая ка�
   expect((await page.request.get("/api/cabinet")).status()).toBe(401);
 });
 
+test("возврат из письма подтверждения сохраняет публичный адрес кабинета", async ({ request }) => {
+  const publicUrl = "https://cabinet.example.test";
+  const result = await request.get("/auth/confirm", {
+    headers: { Host: "cabinet.example.test", "X-Forwarded-Proto": "https" },
+    maxRedirects: 0,
+  });
+  expect(result.status()).toBe(307);
+  expect(new URL(result.headers().location, publicUrl).href).toBe(publicUrl + "/?auth=expired");
+});
+
 test("PDF проходит через сервер до заявленных 12 МБ, превышение отклоняется", async ({ request }) => {
   await accountAction(request, { action: "register", name: "Проверка PDF", email: randomUUID() + "@example.test", password: "test-password-2026" });
   const { activeCardId }: Overview = await (await request.get("/api/cabinet")).json();

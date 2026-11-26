@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
+import { limitAuthAttempt } from "./auth-rate-limit.ts";
 import { CabinetError, type Account, type CabinetStore } from "./cabinet.ts";
 import { digest, newToken, normalizeEmail, passwordKey, type Session } from "./credentials.ts";
 import { withTransaction } from "./postgres.ts";
@@ -34,6 +35,7 @@ export function createPostgresAuth(
   pool: Pool,
   session: Session,
   sendConfirmation: (email: string, token: string) => Promise<void>,
+  clientAddress?: string,
 ): PostgresAuth {
   return {
     async currentUser() {
@@ -49,18 +51,19 @@ export function createPostgresAuth(
 
     async signUp(name, email, password) {
       const address = normalizeEmail(email);
+      await limitAuthAttempt(pool, "signUp", address, clientAddress);
       const salt = randomBytes(16);
       const key = await passwordKey(password, salt);
       const token = newToken();
       const hash = digest(token);
       const reserved = await withTransaction(pool, async (client) => {
         await lockEmail(client, address);
-        await client.query("DELETE FROM medic.registrations WHERE expires_at <= statement_timestamp()");
+        await client.query(`DELETE FROM medic.registrations WHERE expires_at <= statement_timestamp()
+          AND created_at <= statement_timestamp() - interval '1 minute'`);
         const result = await client.query(`
           INSERT INTO medic.registrations (token_hash, name, email, password_salt, password_hash, created_at, expires_at)
           SELECT $1, $2, $3, $4, $5, statement_timestamp(), statement_timestamp() + interval '24 hours'
-          WHERE NOT EXISTS (SELECT 1 FROM medic.accounts WHERE email = $3)
-            AND NOT EXISTS (SELECT 1 FROM medic.registrations WHERE email = $3
+          WHERE NOT EXISTS (SELECT 1 FROM medic.registrations WHERE email = $3
                             AND created_at > statement_timestamp() - interval '1 minute')
         `, [hash, name.trim(), address, salt, key]);
         return result.rowCount === 1;
@@ -77,6 +80,7 @@ export function createPostgresAuth(
     },
 
     async confirmEmail(token, password) {
+      await limitAuthAttempt(pool, "confirmEmail", token, clientAddress);
       const hash = digest(token);
       const { rows: [registration] } = await pool.query<PasswordRecord & { email: string }>(`
         SELECT email, password_salt, password_hash FROM medic.registrations
@@ -93,7 +97,9 @@ export function createPostgresAuth(
           ON CONFLICT (email) DO NOTHING RETURNING id, name
         `, [hash, registration.password_hash]);
         if (!user) throw new CabinetError(confirmationError);
-        await client.query("DELETE FROM medic.registrations WHERE email = $1", [registration.email]);
+        // Invalidate every link while retaining the most recent delivery timestamp for its resend cooldown.
+        await client.query(`UPDATE medic.registrations SET expires_at = statement_timestamp()
+          WHERE email = $1 AND expires_at > statement_timestamp()`, [registration.email]);
         await client.query("INSERT INTO medic.cards (owner_id, name, kind) VALUES ($1, $2, 'self')", [user.id, user.name]);
         return startSession(client, user.id, session.get());
       });
@@ -101,9 +107,11 @@ export function createPostgresAuth(
     },
 
     async signIn(email, password) {
+      const address = normalizeEmail(email);
+      await limitAuthAttempt(pool, "signIn", address, clientAddress);
       const { rows: [account] } = await pool.query<PasswordRecord & { id: string }>(`
         SELECT id, password_salt, password_hash FROM medic.accounts WHERE email = $1
-      `, [normalizeEmail(email)]);
+      `, [address]);
       if (!await passwordMatches(password, account)) throw new CabinetError("Неверная почта или пароль.", 401);
       const token = await withTransaction(pool, (client) => startSession(client, account.id, session.get()));
       session.set(token);

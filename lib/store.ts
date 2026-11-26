@@ -1,4 +1,5 @@
 import { cookies, headers } from "next/headers";
+import { isIP } from "node:net";
 import path from "node:path";
 import { createLocalStore } from "./local-store";
 import { getPostgresPool } from "./postgres";
@@ -23,5 +24,7 @@ export async function getStore(): Promise<CabinetStore> {
   }
   if (!process.env.DATABASE_URL) throw new Error("Set DATABASE_URL for PostgreSQL or select MY_MEDIC_STORAGE=sqlite.");
   const pool = getPostgresPool(process.env.DATABASE_URL);
-  return { ...createPostgresAuth(pool, session, sendConfirmationMail), ...createPostgresCards(pool, session) };
+  const forwardedAddress = process.env.MY_MEDIC_TRUST_PROXY === "1" ? incoming.get("x-real-ip")?.trim() : undefined;
+  const clientAddress = forwardedAddress && isIP(forwardedAddress) ? forwardedAddress : undefined;
+  return { ...createPostgresAuth(pool, session, sendConfirmationMail, clientAddress), ...createPostgresCards(pool, session) };
 }

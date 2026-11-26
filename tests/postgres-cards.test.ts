@@ -1,18 +1,17 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { after, before, test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { createPgConfig } from "@electric-sql/pglite/node-postgres";
 import { Pool } from "pg";
 import { cardUser, pdf } from "./postgres/card-user.ts";
+import { migrateTestDatabase } from "./postgres/pglite.ts";
 
 let database: PGlite;
 let pool: Pool;
 
 before(async () => {
   database = await PGlite.create();
-  await database.exec("CREATE SCHEMA medic");
-  await database.exec(await readFile(new URL("../db/migrations/001_cabinet.sql", import.meta.url), "utf8"));
+  await migrateTestDatabase(database);
   pool = new Pool({ ...createPgConfig(database), max: 1, idleTimeoutMillis: 0 });
 });
 

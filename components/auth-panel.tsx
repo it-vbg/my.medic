@@ -4,7 +4,7 @@ import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, UserRound } fr
 import { useRef, useState, type FormEvent } from "react";
 import { accountAction, Brand, errorText, Message, Spinner, type Notice } from "./portal-ui";
 
-export function AuthPanel({ initialNotice }: { initialNotice?: string }) {
+export function AuthPanel({ initialNotice, confirmationToken }: { initialNotice?: string; confirmationToken?: string }) {
   const [register, setRegister] = useState(false);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -14,6 +14,10 @@ export function AuthPanel({ initialNotice }: { initialNotice?: string }) {
   const [notice, setNotice] = useState<Notice | null>(initialNotice ? { text: initialNotice, kind: "info" } : null);
   const submitting = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
+  const title = confirmationToken ? "Подтверждение почты" : register ? "Создать аккаунт" : "Вход в кабинет";
+  const description = confirmationToken ? "Введите пароль, который вы выбрали при регистрации."
+    : register ? "Заведите личную медицинскую карту. Карты близких можно добавить позже." : "Введите почту и пароль, чтобы открыть свои медицинские карты.";
+  const submitText = confirmationToken ? "Подтвердить почту" : register ? "Создать аккаунт" : "Войти";
 
   function changeMode(next: boolean) {
     if (submitting.current) return;
@@ -32,14 +36,15 @@ export function AuthPanel({ initialNotice }: { initialNotice?: string }) {
     setNotice(null);
     let redirecting = false;
     try {
-      const result = await accountAction<{ confirmationRequired?: boolean }>(
-        register ? { action: "register", name: name.trim(), email: email.trim(), password } : { action: "login", email: email.trim(), password },
-      );
+      const action: Record<string, string> = confirmationToken ? { action: "confirm", token: confirmationToken, password }
+        : register ? { action: "register", name: name.trim(), email: email.trim(), password }
+        : { action: "login", email: email.trim(), password };
+      const result = await accountAction<{ confirmationRequired?: boolean }>(action);
       if (register && result.confirmationRequired) {
         setRegister(false);
         setVisible(false);
         setPassword("");
-        setNotice({ kind: "info", text: "Проверьте почту. Перейдите по ссылке в письме, затем войдите в кабинет." });
+        setNotice({ kind: "info", text: "Проверьте почту. Откройте ссылку в письме и введите пароль, чтобы завершить регистрацию." });
       } else {
         redirecting = true;
         window.location.replace("/");
@@ -65,15 +70,19 @@ export function AuthPanel({ initialNotice }: { initialNotice?: string }) {
       </aside>
       <section className="auth-main" aria-labelledby="auth-heading">
         <div className="auth-alternate">
-          <span>{register ? "Уже есть аккаунт?" : "Нет аккаунта?"}</span>
-          <button className="text-action" type="button" disabled={busy} onClick={() => changeMode(!register)}>
-            {register ? "Войти" : "Зарегистрироваться"} <ArrowRight size={15} aria-hidden="true" />
-          </button>
+          {confirmationToken ? <a className="text-action" href="/">Ко входу <ArrowRight size={15} aria-hidden="true" /></a> : (
+            <>
+              <span>{register ? "Уже есть аккаунт?" : "Нет аккаунта?"}</span>
+              <button className="text-action" type="button" disabled={busy} onClick={() => changeMode(!register)}>
+                {register ? "Войти" : "Зарегистрироваться"} <ArrowRight size={15} aria-hidden="true" />
+              </button>
+            </>
+          )}
         </div>
         <div className="auth-body">
           <div className="auth-intro">
-            <h1 id="auth-heading" ref={heading} tabIndex={-1}>{register ? "Создать аккаунт" : "Вход в кабинет"}</h1>
-            <p>{register ? "Заведите личную медицинскую карту. Карты близких можно добавить позже." : "Введите почту и пароль, чтобы открыть свои медицинские карты."}</p>
+            <h1 id="auth-heading" ref={heading} tabIndex={-1}>{title}</h1>
+            <p>{description}</p>
           </div>
           {notice && <Message notice={notice} />}
           <form className="auth-form" onSubmit={submit} aria-busy={busy}>
@@ -81,10 +90,10 @@ export function AuthPanel({ initialNotice }: { initialNotice?: string }) {
               <span>Ваше имя</span>
               <span className="input-wrap"><UserRound size={18} aria-hidden="true" /><input id="auth-name" name="name" autoComplete="name" placeholder="Имя и фамилия" value={name} onChange={event => setName(event.target.value)} required maxLength={100} disabled={busy} /></span>
             </label>}
-            <label className="field" htmlFor="auth-email">
+            {!confirmationToken && <label className="field" htmlFor="auth-email">
               <span>Электронная почта</span>
               <span className="input-wrap"><Mail size={18} aria-hidden="true" /><input id="auth-email" type="email" name="email" autoComplete="email" placeholder="name@example.ru" value={email} onChange={event => setEmail(event.target.value)} required maxLength={254} disabled={busy} /></span>
-            </label>
+            </label>}
             <div className="field">
               <label htmlFor="auth-password">Пароль</label>
               <div className="input-wrap">
@@ -96,7 +105,7 @@ export function AuthPanel({ initialNotice }: { initialNotice?: string }) {
               </div>
             </div>
             <button className="button button-primary auth-submit" disabled={busy} type="submit">
-              {busy ? (register ? "Создаём аккаунт…" : "Входим…") : (register ? "Создать аккаунт" : "Войти")}
+              {busy ? "Подождите…" : submitText}
               {busy ? <Spinner /> : <ArrowRight size={19} aria-hidden="true" />}
             </button>
           </form>

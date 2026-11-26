@@ -24,6 +24,6 @@ export default defineConfig({
     command: "node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3187",
     url: baseURL,
     reuseExistingServer: false,
-    env: { NEXT_PUBLIC_SUPABASE_URL: "", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "", MY_MEDIC_DATA_DIR: localData },
+    env: { DATABASE_URL: "", APP_URL: baseURL, MY_MEDIC_STORAGE: "sqlite", MY_MEDIC_DATA_DIR: localData },
   },
 });

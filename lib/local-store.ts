@@ -1,37 +1,16 @@
-import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { DatabaseSync, SQLOutputValue } from "node:sqlite";
 import {
   CabinetError, type Account, type CabinetStore, type Card, type Grant, type MedicalDocument,
 } from "./cabinet.ts";
+import { digest, newToken, normalizeEmail, passwordKey, type Session } from "./credentials.ts";
 import { localDatabase } from "./local-database.ts";
 
-type Session = { get(): string | undefined; set(token: string): void; clear(): void };
 type UserOperation<T> = (db: DatabaseSync, user: Account) => T;
 
 const day = 24 * 60 * 60 * 1000;
 const sessionLifetime = 30 * day;
 const inviteLifetime = 7 * day;
-
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
-}
-
-function digest(token: string) {
-  return createHash("sha256").update(token).digest();
-}
-
-function newToken() {
-  return randomBytes(32).toString("base64url");
-}
-
-function passwordKey(password: string, salt: Uint8Array): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    scrypt(password, salt, 64, { N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024 }, (error, key) => {
-      if (error) reject(error);
-      else resolve(key);
-    });
-  });
-}
 
 function accountForSession(db: DatabaseSync, token: string | undefined): Account | null {
   if (!token) return null;

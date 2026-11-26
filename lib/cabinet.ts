@@ -28,6 +28,7 @@ export class CabinetError extends Error {
 export interface CabinetStore {
   currentUser(): Promise<Account | null>;
   signUp(name: string, email: string, password: string): Promise<{ confirmationRequired: boolean }>;
+  confirmEmail?(token: string, password: string): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   listCards(): Promise<Card[]>;

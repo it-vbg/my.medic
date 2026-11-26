@@ -20,6 +20,7 @@ test("a real PDF signature is accepted, with a title derived from its name", asy
 test("an unsupported format or invalid calendar date cannot be stored", async () => {
   await assert.rejects(parseUpload(form(new TextEncoder().encode("ordinary text"), "Файл.pdf")));
   await assert.rejects(parseUpload(form(new TextEncoder().encode("%PDF-1.7"), "Файл.pdf", "2025-02-29")));
+  await assert.rejects(parseUpload(form(new TextEncoder().encode("%PDF-1.7"), "Файл.pdf", "0000-01-01")), { status: 400 });
   await assert.rejects(parseUpload(form(new Uint8Array([0xa5, 0xd0, 0xc4, 0xc6, 0xad]), "Файл.pdf")));
 });
 

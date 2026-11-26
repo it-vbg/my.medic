@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     requireSameOrigin(request);
     const data = await readJson(request);
     const store = await getStore();
-    if (!["login", "register", "logout"].includes(String(data.action)) && !await store.currentUser()) {
+    if (!["login", "register", "confirm", "logout"].includes(String(data.action)) && !await store.currentUser()) {
       throw new CabinetError("Войдите в аккаунт.", 401);
     }
     const getCardId = () => textField(data.cardId, "Карта", 100);
@@ -28,6 +28,10 @@ export async function POST(request: Request) {
       }
       case "login":
         await store.signIn(emailField(data.email), passwordField(data.password, false));
+        break;
+      case "confirm":
+        if (!store.confirmEmail) throw new CabinetError("Ссылка подтверждения недействительна.");
+        await store.confirmEmail(textField(data.token, "Код подтверждения", 128), passwordField(data.password, false));
         break;
       case "logout":
         await store.signOut();

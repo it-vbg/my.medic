@@ -83,7 +83,8 @@ export async function parseUpload(form: FormData): Promise<NewDocument> {
   if (category !== "analysis" && category !== "examination") throw new CabinetError("Выберите тип документа.");
   const examDate = textField(form.get("examDate"), "Дата исследования", 10);
   const date = new Date(examDate + "T00:00:00Z");
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(examDate) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== examDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(examDate) || examDate.startsWith("0000") ||
+      !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== examDate) {
     throw new CabinetError("Укажите действительную дату исследования.");
   }
   const title = textField(form.get("title") || filename.replace(/\.[^./]+$/u, "").slice(0, 140) || filename, "Название", 140);
